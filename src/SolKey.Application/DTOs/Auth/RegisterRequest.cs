@@ -7,4 +7,6 @@ public record RegisterRequest(
     string Password,
     string? PhoneNumber,
     string? Bio,
-    bool IsTeacher);
+    bool IsTeacher,
+    string DeviceId,
+    string DeviceName);

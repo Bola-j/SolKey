@@ -12,4 +12,7 @@ public class ResponseEnvelope<T>
 
     public static ResponseEnvelope<T> Failure(IEnumerable<string> errors, string message = "") =>
         new() { Succeeded = false, Message = message, Errors = errors.ToArray() };
+
+    public static ResponseEnvelope<T> Failure(string error, string message = "") =>
+        new() { Succeeded = false, Message = message, Errors = new[] { error } };
 }

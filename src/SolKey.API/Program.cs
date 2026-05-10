@@ -1,11 +1,12 @@
 using Amazon.S3;
-using FluentValidation.AspNetCore;
+using Euphoric.FluentValidation.AspNetCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Serilog;
 using SolKey.Application.Interfaces;
+using SolKey.API.Middleware;
 using SolKey.Infrastructure.Identity;
 using SolKey.Infrastructure.Persistence;
 using SolKey.Infrastructure.Services;
@@ -105,6 +106,7 @@ builder.Services.AddHostedService<SessionCleanupService>();
 var app = builder.Build();
 
 app.UseSerilogRequestLogging();
+app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseSwagger();
 app.UseSwaggerUI();
 

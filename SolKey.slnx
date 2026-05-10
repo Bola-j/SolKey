@@ -1,2 +1,6 @@
 <Solution>
+  <Project Path="src/SolKey.API/SolKey.API.csproj" />
+  <Project Path="src/SolKey.Application/SolKey.Application.csproj" />
+  <Project Path="src/SolKey.Domain/SolKey.Domain.csproj" />
+  <Project Path="src/SolKey.Infrastructure/SolKey.Infrastructure.csproj" />
 </Solution>

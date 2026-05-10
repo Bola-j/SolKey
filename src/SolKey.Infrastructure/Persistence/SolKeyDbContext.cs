@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using SolKey.Domain.Common;
 using SolKey.Domain.Entities;
 
 namespace SolKey.Infrastructure.Persistence;
@@ -30,5 +31,35 @@ public class SolKeyDbContext : DbContext
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(SolKeyDbContext).Assembly);
         base.OnModelCreating(modelBuilder);
+    }
+
+    public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        ApplyAuditInfo();
+        return base.SaveChangesAsync(cancellationToken);
+    }
+
+    public override int SaveChanges()
+    {
+        ApplyAuditInfo();
+        return base.SaveChanges();
+    }
+
+    private void ApplyAuditInfo()
+    {
+        var utcNow = DateTime.UtcNow;
+        foreach (var entry in ChangeTracker.Entries<BaseEntity>())
+        {
+            switch (entry.State)
+            {
+                case EntityState.Added:
+                    entry.Entity.CreatedAt = utcNow;
+                    entry.Entity.ModifiedAt = null;
+                    break;
+                case EntityState.Modified:
+                    entry.Entity.ModifiedAt = utcNow;
+                    break;
+            }
+        }
     }
 }
