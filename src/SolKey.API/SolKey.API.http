@@ -1,0 +1,6 @@
+@SolKey.API_HostAddress = http://localhost:5196
+
+GET {{SolKey.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
