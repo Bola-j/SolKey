@@ -1,3 +1,4 @@
+using SolKey.Application.DTOs.Payments;
 using SolKey.Application.DTOs.Subscriptions;
 
 namespace SolKey.Application.Interfaces;
