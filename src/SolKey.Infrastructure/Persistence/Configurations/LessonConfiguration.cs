@@ -10,6 +10,15 @@ public class LessonConfiguration : IEntityTypeConfiguration<Lesson>
     {
         builder.Property(lesson => lesson.Title).HasMaxLength(200).IsRequired();
         builder.HasIndex(lesson => new { lesson.ChapterId, lesson.Order }).IsUnique();
+        builder.HasOne(lesson => lesson.Chapter)
+            .WithMany(chapter => chapter.Lessons)
+            .HasForeignKey(lesson => lesson.ChapterId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasMany(lesson => lesson.Questions)
+            .WithOne(question => question.Lesson)
+            .HasForeignKey(question => question.LessonId)
+            .OnDelete(DeleteBehavior.Restrict);
         builder.HasQueryFilter(lesson => !lesson.IsDeleted);
     }
 }

@@ -11,6 +11,10 @@ public class BookConfiguration : IEntityTypeConfiguration<Book>
         builder.Property(book => book.Title).HasMaxLength(200).IsRequired();
         builder.Property(book => book.Description).HasMaxLength(2000).IsRequired();
         builder.Property(book => book.CoverImage).HasMaxLength(500).IsRequired();
+        builder.HasMany(book => book.Chapters)
+            .WithOne(chapter => chapter.Book)
+            .HasForeignKey(chapter => chapter.BookId)
+            .OnDelete(DeleteBehavior.Restrict);
         builder.HasQueryFilter(book => !book.IsDeleted);
     }
 }

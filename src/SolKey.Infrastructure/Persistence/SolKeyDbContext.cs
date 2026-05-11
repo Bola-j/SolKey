@@ -30,6 +30,7 @@ public class SolKeyDbContext : DbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(SolKeyDbContext).Assembly);
+        SeedData.Apply(modelBuilder);
         base.OnModelCreating(modelBuilder);
     }
 
