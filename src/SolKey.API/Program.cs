@@ -2,7 +2,7 @@ using Amazon.Extensions.NETCore.Setup;
 using Amazon.Runtime;
 using Amazon.S3;
 using Euphoric.FluentValidation.AspNetCore;
-using FluentValidation.AspNetCore;
+
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -33,17 +33,15 @@ public partial class Program
         // Controllers
         // =========================
         builder.Services
-            .AddControllers()
+            .AddControllers(options =>
+            {
+                options.Filters.Add<ValidationActionFilter>();
+                options.Filters.Add<ValidationExceptionFilter>();
+            })
             .AddJsonOptions(options =>
             {
                 options.JsonSerializerOptions.PropertyNamingPolicy = null;
             });
-
-        // =========================
-        // FluentValidation
-        // =========================
-        builder.Services.AddFluentValidationAutoValidation();
-        builder.Services.AddFluentValidationClientsideAdapters();
 
         // =========================
         // Database
