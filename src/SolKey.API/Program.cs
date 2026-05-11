@@ -1,17 +1,18 @@
+using Amazon.Extensions.NETCore.Setup;
+using Amazon.Runtime;
 using Amazon.S3;
 using Euphoric.FluentValidation.AspNetCore;
+using FluentValidation.AspNetCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Serilog;
-using SolKey.Application.Interfaces;
 using SolKey.API.Middleware;
+using SolKey.Application.Interfaces;
 using SolKey.Infrastructure.Identity;
 using SolKey.Infrastructure.Persistence;
 using SolKey.Infrastructure.Services;
 using System.Text;
-using Microsoft.OpenApi;
-using Microsoft.OpenApi.Models;
 
 public partial class Program
 {
@@ -19,75 +20,105 @@ public partial class Program
     {
         var builder = WebApplication.CreateBuilder(args);
 
+        // =========================
+        // Logging
+        // =========================
         Log.Logger = new LoggerConfiguration()
             .ReadFrom.Configuration(builder.Configuration)
             .CreateLogger();
 
         builder.Host.UseSerilog();
 
-        builder.Services.AddControllers()
-            .AddJsonOptions(options => options.JsonSerializerOptions.PropertyNamingPolicy = null);
+        // =========================
+        // Controllers
+        // =========================
+        builder.Services
+            .AddControllers()
+            .AddJsonOptions(options =>
+            {
+                options.JsonSerializerOptions.PropertyNamingPolicy = null;
+            });
 
+        // =========================
+        // FluentValidation
+        // =========================
         builder.Services.AddFluentValidationAutoValidation();
         builder.Services.AddFluentValidationClientsideAdapters();
 
+        // =========================
+        // Database
+        // =========================
         builder.Services.AddDbContext<SolKeyDbContext>(options =>
-            options.UseSqlServer(builder.Configuration.GetConnectionString("SolKeyDatabase")));
+            options.UseSqlServer(
+                builder.Configuration.GetConnectionString("SolKeyDatabase")));
 
-        var jwtOptions = builder.Configuration.GetSection("Jwt").Get<JwtOptions>() ?? new JwtOptions();
+        // =========================
+        // JWT
+        // =========================
+        var jwtOptions =
+            builder.Configuration
+                .GetSection("Jwt")
+                .Get<JwtOptions>() ?? new JwtOptions();
+
         builder.Services.AddSingleton(jwtOptions);
-        builder.Services.AddSingleton(new JwtTokenService(jwtOptions));
+        builder.Services.AddSingleton<JwtTokenService>();
 
-        builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+        builder.Services
+            .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
             {
-                options.TokenValidationParameters = new TokenValidationParameters
-                {
-                    ValidateIssuer = true,
-                    ValidateAudience = true,
-                    ValidateLifetime = true,
-                    ValidateIssuerSigningKey = true,
-                    ValidIssuer = jwtOptions.Issuer,
-                    ValidAudience = jwtOptions.Audience,
-                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.SigningKey))
-                };
+                options.TokenValidationParameters =
+                    new TokenValidationParameters
+                    {
+                        ValidateIssuer = true,
+                        ValidateAudience = true,
+                        ValidateLifetime = true,
+                        ValidateIssuerSigningKey = true,
+
+                        ValidIssuer = jwtOptions.Issuer,
+                        ValidAudience = jwtOptions.Audience,
+
+                        IssuerSigningKey =
+                            new SymmetricSecurityKey(
+                                Encoding.UTF8.GetBytes(jwtOptions.SigningKey))
+                    };
             });
 
         builder.Services.AddAuthorization();
 
-        builder.Services.AddSwaggerGen(options =>
+        // =========================
+        // Swagger
+        // =========================
+        builder.Services.AddEndpointsApiExplorer();
+
+        builder.Services.AddSwaggerGen();
+
+        // =========================
+        // AWS S3
+        // =========================
+        var storageAccessKey = builder.Configuration["Storage:AccessKey"];
+        var storageSecretKey = builder.Configuration["Storage:SecretKey"];
+        var storageServiceUrl = builder.Configuration["Storage:ServiceUrl"];
+
+        builder.Services.AddSingleton<IAmazonS3>(_ =>
         {
-            options.SwaggerDoc("v1", new OpenApiInfo { Title = "SolKey API", Version = "v1" });
-            options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+            var config = new AmazonS3Config
             {
-                In = ParameterLocation.Header,
-                Description = "JWT Authorization header using the Bearer scheme.",
-                Name = "Authorization",
-                Type = SecuritySchemeType.Http,
-                Scheme = "bearer",
-                BearerFormat = "JWT"
-            });
-            options.AddSecurityRequirement(new OpenApiSecurityRequirement
-            {
-        {
-            new OpenApiSecurityScheme
-            {
-                Reference = new OpenApiReference
-                {
-                    Type = ReferenceType.SecurityScheme,
-                    Id = "Bearer"
-                }
-            },
-            Array.Empty<string>()
-        }
-            });
+                ServiceURL = storageServiceUrl,
+                ForcePathStyle = true
+            };
+
+            return string.IsNullOrWhiteSpace(storageAccessKey)
+                || string.IsNullOrWhiteSpace(storageSecretKey)
+                ? new AmazonS3Client(config)
+                : new AmazonS3Client(
+                    new BasicAWSCredentials(storageAccessKey, storageSecretKey),
+                    config);
         });
 
-        builder.Services.AddAWSService<IAmazonS3>(new Amazon.Extensions.NETCore.Setup.AWSOptions
-        {
-            ServiceURL = builder.Configuration["Storage:ServiceUrl"]
-        });
-
+        // =========================
+        // Application Services
+        // =========================
         builder.Services.AddScoped<IAuthService, AuthService>();
         builder.Services.AddScoped<IUserService, UserService>();
         builder.Services.AddScoped<IBookService, BookService>();
@@ -103,23 +134,54 @@ public partial class Program
         builder.Services.AddScoped<IStorageService>(provider =>
         {
             var s3Client = provider.GetRequiredService<IAmazonS3>();
-            var bucketName = builder.Configuration["Storage:BucketName"] ?? string.Empty;
+
+            var bucketName =
+                builder.Configuration["Storage:BucketName"]
+                ?? string.Empty;
+
             return new StorageService(s3Client, bucketName);
         });
 
+        // =========================
+        // Background Services
+        // =========================
         builder.Services.AddHostedService<SessionCleanupService>();
 
+        // =========================
+        // Build App
+        // =========================
         var app = builder.Build();
 
+        // =========================
+        // Middleware
+        // =========================
         app.UseSerilogRequestLogging();
-        app.UseMiddleware<ExceptionHandlingMiddleware>();
-        app.UseSwagger();
-        app.UseSwaggerUI();
 
+        app.UseMiddleware<ExceptionHandlingMiddleware>();
+
+        // Swagger
+        app.UseSwagger();
+
+        app.UseSwaggerUI(options =>
+        {
+            options.SwaggerEndpoint(
+                "/swagger/v1/swagger.json",
+                "SolKey API v1");
+
+            options.RoutePrefix = string.Empty;
+        });
+
+        // HTTPS
+        app.UseHttpsRedirection();
+
+        // Auth
         app.UseAuthentication();
         app.UseAuthorization();
+
+        // Custom Middleware
         app.UseMiddleware<SessionTrackingMiddleware>();
 
+        // Controllers
         app.MapControllers();
 
         app.Run();
