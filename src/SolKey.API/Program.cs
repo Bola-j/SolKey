@@ -47,8 +47,8 @@ public partial class Program
         // Database
         // =========================
         builder.Services.AddDbContext<SolKeyDbContext>(options =>
-            options.UseSqlServer(
-                builder.Configuration.GetConnectionString("SolKeyDatabase")));
+            options.UseNpgsql(
+                builder.Configuration.GetConnectionString("DefaultConnection")));
 
         // =========================
         // JWT
