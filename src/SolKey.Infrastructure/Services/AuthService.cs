@@ -13,11 +13,13 @@ public class AuthService : IAuthService
 {
     private readonly SolKeyDbContext _dbContext;
     private readonly JwtTokenService _jwtTokenService;
+    private readonly JwtOptions _jwtOptions;
 
-    public AuthService(SolKeyDbContext dbContext, JwtTokenService jwtTokenService)
+    public AuthService(SolKeyDbContext dbContext, JwtTokenService jwtTokenService, JwtOptions jwtOptions)
     {
         _dbContext = dbContext;
         _jwtTokenService = jwtTokenService;
+        _jwtOptions = jwtOptions;
     }
 
     public async Task<AuthResponse> RegisterAsync(RegisterRequest request, CancellationToken cancellationToken)
@@ -156,13 +158,15 @@ public class AuthService : IAuthService
             CreatedBy = user.Email
         };
 
+        var refreshDays = _jwtOptions.RefreshTokenDays > 0 ? _jwtOptions.RefreshTokenDays : 7;
+
         var refreshToken = new RefreshToken
         {
             Id = Guid.NewGuid(),
             UserId = user.Id,
             SessionId = session.Id,
             Token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64)),
-            ExpiresAt = DateTime.UtcNow.AddDays(7),
+            ExpiresAt = DateTime.UtcNow.AddDays(refreshDays),
             IsRevoked = false,
             CreatedAt = DateTime.UtcNow,
             CreatedBy = user.Email

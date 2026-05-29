@@ -1,17 +1,24 @@
 using Amazon.Extensions.NETCore.Setup;
 using Amazon.Runtime;
 using Amazon.S3;
-using Euphoric.FluentValidation.AspNetCore;
-
+using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi;
 using Serilog;
 using SolKey.API.Middleware;
 using SolKey.Application.Interfaces;
+using SolKey.Application.DTOs.Auth;
+using SolKey.Application.DTOs.Payments;
+using SolKey.Application.DTOs.Questions;
+using SolKey.Application.DTOs.Sessions;
+using SolKey.Application.DTOs.Videos;
+using SolKey.Application.Validators;
 using SolKey.Infrastructure.Identity;
 using SolKey.Infrastructure.Persistence;
 using SolKey.Infrastructure.Services;
+using System.IdentityModel.Tokens.Jwt;
 using System.Text;
 
 public partial class Program
@@ -35,13 +42,20 @@ public partial class Program
         builder.Services
             .AddControllers(options =>
             {
-                options.Filters.Add<ValidationActionFilter>();
-                options.Filters.Add<ValidationExceptionFilter>();
+                options.Filters.Add<Euphoric.FluentValidation.AspNetCore.ValidationActionFilter>();
+                options.Filters.Add<Euphoric.FluentValidation.AspNetCore.ValidationExceptionFilter>();
             })
             .AddJsonOptions(options =>
             {
                 options.JsonSerializerOptions.PropertyNamingPolicy = null;
             });
+
+        builder.Services.AddScoped<IValidator<RegisterRequest>, RegisterRequestValidator>();
+        builder.Services.AddScoped<IValidator<LoginRequest>, LoginRequestValidator>();
+        builder.Services.AddScoped<IValidator<CreateSessionRequest>, CreateSessionRequestValidator>();
+        builder.Services.AddScoped<IValidator<CreatePaymentRequest>, CreatePaymentRequestValidator>();
+        builder.Services.AddScoped<IValidator<UploadVideoRequest>, UploadVideoRequestValidator>();
+        builder.Services.AddScoped<IValidator<AskQuestionRequest>, AskQuestionRequestValidator>();
 
         // =========================
         // Database
@@ -73,6 +87,9 @@ public partial class Program
                         ValidateLifetime = true,
                         ValidateIssuerSigningKey = true,
 
+                        NameClaimType = JwtRegisteredClaimNames.Sub,
+                        RoleClaimType = "role",
+
                         ValidIssuer = jwtOptions.Issuer,
                         ValidAudience = jwtOptions.Audience,
 
@@ -89,7 +106,28 @@ public partial class Program
         // =========================
         builder.Services.AddEndpointsApiExplorer();
 
-        builder.Services.AddSwaggerGen();
+        builder.Services.AddSwaggerGen(options =>
+        {
+            options.SwaggerDoc("v1", new OpenApiInfo { Title = "SolKey API", Version = "v1" });
+
+            var scheme = new OpenApiSecurityScheme
+            {
+                Name = "Authorization",
+                Type = SecuritySchemeType.Http,
+                Scheme = "bearer",
+                BearerFormat = "JWT",
+                In = ParameterLocation.Header,
+                Description = "JWT Authorization header using the Bearer scheme."
+            };
+
+            options.AddSecurityDefinition("Bearer", scheme);
+
+            var schemeReference = new OpenApiSecuritySchemeReference("Bearer", null, null);
+            options.AddSecurityRequirement(_ => new OpenApiSecurityRequirement
+            {
+                { schemeReference, new List<string>() }
+            });
+        });
 
         // =========================
         // AWS S3

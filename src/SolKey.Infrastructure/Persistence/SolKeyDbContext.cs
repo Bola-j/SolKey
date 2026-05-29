@@ -62,6 +62,8 @@ public class SolKeyDbContext : DbContext
                     break;
                 case EntityState.Deleted:
                     entry.Entity.IsDeleted = true;
+                    entry.Entity.ModifiedAt = utcNow;
+                    entry.State = EntityState.Modified;
                     break;
             }
         }

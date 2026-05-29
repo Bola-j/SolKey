@@ -25,7 +25,7 @@ The system uses:
 
 * ASP.NET Core Web API (.NET 10\)  
 * Angular SPA frontend  
-* SQL Server  
+* PostgreSQL  
 * Cloudflare R2 for video storage  
 * JWT \+ Refresh Tokens  
 * Pragmatic Clean Architecture
@@ -239,7 +239,7 @@ package "ASP.NET Core Backend" {
   \[Cloudflare R2 Service\]  
 }
 
-database "SQL Server" {  
+database "PostgreSQL" {  
   \[Database\]  
 }
 
