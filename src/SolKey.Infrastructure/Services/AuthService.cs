@@ -6,6 +6,7 @@ using SolKey.Domain.Enums;
 using SolKey.Infrastructure.Identity;
 using SolKey.Infrastructure.Persistence;
 using System.Security.Cryptography;
+using System.Text;
 
 namespace SolKey.Infrastructure.Services;
 
@@ -14,12 +15,23 @@ public class AuthService : IAuthService
     private readonly SolKeyDbContext _dbContext;
     private readonly JwtTokenService _jwtTokenService;
     private readonly JwtOptions _jwtOptions;
+    private readonly IEmailSender _emailSender;
+    private readonly EmailOptions _emailOptions;
 
-    public AuthService(SolKeyDbContext dbContext, JwtTokenService jwtTokenService, JwtOptions jwtOptions)
+    private const string EmailVerificationPurpose = "email_verification";
+
+    public AuthService(
+        SolKeyDbContext dbContext,
+        JwtTokenService jwtTokenService,
+        JwtOptions jwtOptions,
+        IEmailSender emailSender,
+        EmailOptions emailOptions)
     {
         _dbContext = dbContext;
         _jwtTokenService = jwtTokenService;
         _jwtOptions = jwtOptions;
+        _emailSender = emailSender;
+        _emailOptions = emailOptions;
     }
 
     public async Task<AuthResponse> RegisterAsync(RegisterRequest request, CancellationToken cancellationToken)
@@ -54,6 +66,8 @@ public class AuthService : IAuthService
 
         _dbContext.Users.Add(user);
         await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await SendVerificationEmailAsync(user, enforceCooldown: false, cancellationToken);
 
         return await CreateAuthResponseAsync(user, request.DeviceId, request.DeviceName, "", cancellationToken);
     }
@@ -114,18 +128,65 @@ public class AuthService : IAuthService
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task VerifyEmailAsync(Guid userId, CancellationToken cancellationToken)
+    public async Task VerifyEmailAsync(string token, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            throw new InvalidOperationException("Invalid or expired verification token.");
+        }
+
+        var tokenHash = HashToken(token);
+        var verificationToken = await _dbContext.EmailVerificationTokens
+            .Include(t => t.User)
+            .FirstOrDefaultAsync(
+                t => t.TokenHash == tokenHash && t.Purpose == EmailVerificationPurpose,
+                cancellationToken);
+
+        if (verificationToken is null)
+        {
+            throw new InvalidOperationException("Invalid or expired verification token.");
+        }
+
+        var now = DateTime.UtcNow;
+
+        if (verificationToken.ConsumedAt is not null)
+        {
+            if (verificationToken.User.IsEmailVerified)
+            {
+                return;
+            }
+
+            throw new InvalidOperationException("Invalid or expired verification token.");
+        }
+
+        if (verificationToken.ExpiresAt <= now)
+        {
+            throw new InvalidOperationException("Invalid or expired verification token.");
+        }
+
+        if (!verificationToken.User.IsEmailVerified)
+        {
+            verificationToken.User.IsEmailVerified = true;
+            verificationToken.User.ModifiedAt = now;
+            verificationToken.User.ModifiedBy = verificationToken.User.Email;
+        }
+
+        verificationToken.ConsumedAt = now;
+        verificationToken.ModifiedAt = now;
+        verificationToken.ModifiedBy = verificationToken.User.Email;
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task ResendVerificationAsync(Guid userId, CancellationToken cancellationToken)
     {
         var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == userId, cancellationToken);
         if (user is null)
         {
-            throw new InvalidOperationException("User not found.");
+            return;
         }
 
-        user.IsEmailVerified = true;
-        user.ModifiedAt = DateTime.UtcNow;
-        user.ModifiedBy = user.Email;
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        await SendVerificationEmailAsync(user, enforceCooldown: true, cancellationToken);
     }
 
     private async Task<AuthResponse> CreateAuthResponseAsync(User user, string deviceId, string deviceName, string ipAddress, CancellationToken cancellationToken)
@@ -179,5 +240,109 @@ public class AuthService : IAuthService
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         return new AuthResponse(accessToken, expiresAt, refreshToken.Token, refreshToken.ExpiresAt);
+    }
+
+    private async Task SendVerificationEmailAsync(User user, bool enforceCooldown, CancellationToken cancellationToken)
+    {
+        if (user.IsEmailVerified)
+        {
+            return;
+        }
+
+        var now = DateTime.UtcNow;
+        if (enforceCooldown)
+        {
+            var cooldownMinutes = _emailOptions.ResendCooldownMinutes > 0
+                ? _emailOptions.ResendCooldownMinutes
+                : 60;
+
+            var lastCreatedAt = await _dbContext.EmailVerificationTokens
+                .Where(t => t.UserId == user.Id && t.Purpose == EmailVerificationPurpose)
+                .OrderByDescending(t => t.CreatedAt)
+                .Select(t => (DateTime?)t.CreatedAt)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (lastCreatedAt.HasValue && lastCreatedAt.Value.AddMinutes(cooldownMinutes) > now)
+            {
+                return;
+            }
+        }
+
+        var rawToken = await CreateEmailVerificationTokenAsync(user, cancellationToken);
+        var link = BuildVerificationLink(rawToken);
+
+        var subject = "Verify your SolKey email";
+        var body = $@"<p>Hi {user.FirstName},</p>
+    <p>Please verify your email address by clicking the link below:</p>
+    <p><a href=""{link}"">Verify email</a></p>
+    <p>If you did not create this account, you can safely ignore this email.</p>";
+
+        await _emailSender.SendAsync(user.Email, subject, body, cancellationToken);
+    }
+
+    private async Task<string> CreateEmailVerificationTokenAsync(User user, CancellationToken cancellationToken)
+    {
+        var now = DateTime.UtcNow;
+
+        var activeTokens = await _dbContext.EmailVerificationTokens
+            .Where(t => t.UserId == user.Id
+                && t.Purpose == EmailVerificationPurpose
+                && t.ConsumedAt == null
+                && t.ExpiresAt > now)
+            .ToListAsync(cancellationToken);
+
+        foreach (var token in activeTokens)
+        {
+            token.ConsumedAt = now;
+            token.ModifiedAt = now;
+            token.ModifiedBy = user.Email;
+        }
+
+        var rawToken = GenerateToken();
+        var tokenHash = HashToken(rawToken);
+        var expiryHours = _emailOptions.TokenExpiryHours > 0 ? _emailOptions.TokenExpiryHours : 24;
+
+        var verificationToken = new EmailVerificationToken
+        {
+            Id = Guid.NewGuid(),
+            UserId = user.Id,
+            TokenHash = tokenHash,
+            ExpiresAt = now.AddHours(expiryHours),
+            Purpose = EmailVerificationPurpose,
+            CreatedAt = now,
+            CreatedBy = user.Email
+        };
+
+        _dbContext.EmailVerificationTokens.Add(verificationToken);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        return rawToken;
+    }
+
+    private string BuildVerificationLink(string token)
+    {
+        var baseUrl = _emailOptions.VerificationBaseUrl?.TrimEnd('/');
+        if (string.IsNullOrWhiteSpace(baseUrl))
+        {
+            throw new InvalidOperationException("Verification base URL is not configured.");
+        }
+
+        return $"{baseUrl}/api/auth/verify-email?token={Uri.EscapeDataString(token)}";
+    }
+
+    private static string GenerateToken()
+    {
+        var bytes = RandomNumberGenerator.GetBytes(32);
+        return Convert.ToBase64String(bytes)
+            .TrimEnd('=')
+            .Replace('+', '-')
+            .Replace('/', '_');
+    }
+
+    private static string HashToken(string token)
+    {
+        using var sha = SHA256.Create();
+        var hashBytes = sha.ComputeHash(Encoding.UTF8.GetBytes(token));
+        return Convert.ToHexString(hashBytes).ToLowerInvariant();
     }
 }

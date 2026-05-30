@@ -1,3 +1,9 @@
 .vs/
 **/bin/
 **/obj/
+src/SolKey.API/appsettings.Development.json
+src/SolKey.API/appsettings.json
+src/SolKey.API/appsettings.json
+src/SolKey.API/appsettings.Development.json
+src/SolKey.API/appsettings.json
+src/SolKey.API/appsettings.Development.json

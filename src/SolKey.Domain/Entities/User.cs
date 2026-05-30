@@ -18,6 +18,7 @@ public class User : BaseEntity
 
     public ICollection<UserSession> Sessions { get; set; } = new List<UserSession>();
     public ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();
+    public ICollection<EmailVerificationToken> EmailVerificationTokens { get; set; } = new List<EmailVerificationToken>();
     public ICollection<Subscription> Subscriptions { get; set; } = new List<Subscription>();
     public ICollection<SessionPurchase> SessionPurchases { get; set; } = new List<SessionPurchase>();
     public ICollection<Video> Videos { get; set; } = new List<Video>();

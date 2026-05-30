@@ -3,6 +3,8 @@ using Microsoft.Extensions.Hosting;
 using SolKey.Application.Common;
 using SolKey.Application.DTOs.Auth;
 using SolKey.Application.Interfaces;
+using Microsoft.AspNetCore.Authorization;
+using System.Linq;
 
 namespace SolKey.API.Controllers;
 
@@ -57,11 +59,29 @@ public class AuthController : ControllerBase
         return Ok(ResponseEnvelope<object>.Success(new { }));
     }
 
-    [HttpPost("verify-email/{userId:guid}")]
-    public async Task<ActionResult<ResponseEnvelope<object>>> VerifyEmail(Guid userId, CancellationToken cancellationToken)
+    [HttpGet("verify-email")]
+    public async Task<ActionResult<ResponseEnvelope<object>>> VerifyEmail([FromQuery] string token, CancellationToken cancellationToken)
     {
-        await _authService.VerifyEmailAsync(userId, cancellationToken);
+        await _authService.VerifyEmailAsync(token, cancellationToken);
         return Ok(ResponseEnvelope<object>.Success(new { }));
+    }
+
+    [Authorize]
+    [HttpPost("resend-verification")]
+    public async Task<ActionResult<ResponseEnvelope<object>>> ResendVerification(CancellationToken cancellationToken)
+    {
+        var userId = Guid.Parse(User.FindFirst("sub")!.Value);
+        await _authService.ResendVerificationAsync(userId, cancellationToken);
+        return Ok(ResponseEnvelope<object>.Success(new { }));
+    }
+
+    [Authorize]
+    [HttpGet("whoami")]
+    public ActionResult<ResponseEnvelope<object>> WhoAmI()
+    {
+        var claims = User.Claims.Select(claim => new { claim.Type, claim.Value }).ToList();
+        var hasAuthHeader = Request.Headers.ContainsKey("Authorization");
+        return Ok(ResponseEnvelope<object>.Success(new { hasAuthHeader, claims }));
     }
 
     private RegisterRequest ApplyDeviceDefaults(RegisterRequest request)

@@ -18,6 +18,7 @@ using SolKey.Application.Validators;
 using SolKey.Infrastructure.Identity;
 using SolKey.Infrastructure.Persistence;
 using SolKey.Infrastructure.Services;
+using System.Collections.Generic;
 using System.IdentityModel.Tokens.Jwt;
 using System.Text;
 
@@ -79,6 +80,7 @@ public partial class Program
             .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
             {
+                options.IncludeErrorDetails = true;
                 options.TokenValidationParameters =
                     new TokenValidationParameters
                     {
@@ -97,9 +99,60 @@ public partial class Program
                             new SymmetricSecurityKey(
                                 Encoding.UTF8.GetBytes(jwtOptions.SigningKey))
                     };
+
+                options.Events = new JwtBearerEvents
+                {
+                    OnMessageReceived = context =>
+                    {
+                        var logger = context.HttpContext.RequestServices
+                            .GetRequiredService<ILoggerFactory>()
+                            .CreateLogger("JwtAuth");
+
+                        if (!context.Request.Headers.ContainsKey("Authorization"))
+                        {
+                            logger.LogWarning("Missing Authorization header.");
+                        }
+
+                        return Task.CompletedTask;
+                    },
+                    OnAuthenticationFailed = context =>
+                    {
+                        var logger = context.HttpContext.RequestServices
+                            .GetRequiredService<ILoggerFactory>()
+                            .CreateLogger("JwtAuth");
+
+                        logger.LogWarning(context.Exception, "JWT authentication failed.");
+                        return Task.CompletedTask;
+                    },
+                    OnChallenge = context =>
+                    {
+                        if (context.AuthenticateFailure is null)
+                        {
+                            return Task.CompletedTask;
+                        }
+
+                        var logger = context.HttpContext.RequestServices
+                            .GetRequiredService<ILoggerFactory>()
+                            .CreateLogger("JwtAuth");
+
+                        logger.LogWarning(context.AuthenticateFailure, "JWT challenge triggered.");
+                        return Task.CompletedTask;
+                    }
+                };
             });
 
         builder.Services.AddAuthorization();
+
+        // =========================
+        // Email
+        // =========================
+        var emailOptions =
+            builder.Configuration
+                .GetSection("Email")
+                .Get<EmailOptions>() ?? new EmailOptions();
+
+        builder.Services.AddSingleton(emailOptions);
+        builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
 
         // =========================
         // Swagger
