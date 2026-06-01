@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Http;
+using SolKey.Application.Common;
 using SolKey.Application.DTOs.Uploads;
 using SolKey.Application.Interfaces;
 using System.IdentityModel.Tokens.Jwt;
@@ -8,7 +10,7 @@ namespace SolKey.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class UploadsController : ControllerBase
+public class UploadsController : ApiControllerBase
 {
     private readonly IUploadService _uploadService;
 
@@ -19,15 +21,16 @@ public class UploadsController : ControllerBase
 
     [HttpPost("presign")]
     [Authorize]
-    public async Task<IActionResult> Presign([FromBody] PresignUploadRequest request, CancellationToken cancellationToken)
+    public Task<ActionResult<ResponseEnvelope<PresignUploadResponse>>> Presign([FromBody] PresignUploadRequest request, CancellationToken cancellationToken)
     {
         var sub = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
         if (string.IsNullOrWhiteSpace(sub) || !Guid.TryParse(sub, out var userId))
         {
-            return Unauthorized();
+            var response = ResponseEnvelope<PresignUploadResponse>.Failure("Unauthorized.");
+            return Task.FromResult<ActionResult<ResponseEnvelope<PresignUploadResponse>>>(
+                StatusCode(StatusCodes.Status401Unauthorized, response));
         }
 
-        var result = await _uploadService.CreatePresignedUploadAsync(userId, request, cancellationToken);
-        return Ok(result);
+        return ExecuteAsync(() => _uploadService.CreatePresignedUploadAsync(userId, request, cancellationToken));
     }
 }

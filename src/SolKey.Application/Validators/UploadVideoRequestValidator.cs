@@ -10,5 +10,6 @@ public class UploadVideoRequestValidator : AbstractValidator<UploadVideoRequest>
         RuleFor(request => request.Title).NotEmpty().MaximumLength(200);
         RuleFor(request => request.BlobPath).NotEmpty().MaximumLength(500);
         RuleFor(request => request.Type).NotEmpty();
+        RuleFor(request => request.UploadTicketId).NotEmpty();
     }
 }

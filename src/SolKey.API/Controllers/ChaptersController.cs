@@ -8,7 +8,7 @@ namespace SolKey.API.Controllers;
 
 [ApiController]
 [Route("api/chapters")]
-public class ChaptersController : ControllerBase
+public class ChaptersController : ApiControllerBase
 {
     private readonly IChapterService _chapterService;
 
@@ -18,40 +18,39 @@ public class ChaptersController : ControllerBase
     }
 
     [HttpGet("book/{bookId:guid}")]
-    public async Task<ActionResult<ResponseEnvelope<IReadOnlyCollection<ChapterDto>>>> GetByBook(Guid bookId, CancellationToken cancellationToken)
+    public Task<ActionResult<ResponseEnvelope<PagedResponse<ChapterDto>>>> GetByBook(
+        Guid bookId,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        CancellationToken cancellationToken = default)
     {
-        var response = await _chapterService.GetByBookAsync(bookId, cancellationToken);
-        return Ok(ResponseEnvelope<IReadOnlyCollection<ChapterDto>>.Success(response));
+        return ExecuteAsync(() => _chapterService.GetByBookAsync(bookId, page, pageSize, cancellationToken));
     }
 
     [HttpGet("{id:guid}")]
-    public async Task<ActionResult<ResponseEnvelope<ChapterDto>>> GetById(Guid id, CancellationToken cancellationToken)
+    public Task<ActionResult<ResponseEnvelope<ChapterDto>>> GetById(Guid id, CancellationToken cancellationToken)
     {
-        var response = await _chapterService.GetByIdAsync(id, cancellationToken);
-        return Ok(ResponseEnvelope<ChapterDto>.Success(response));
+        return ExecuteAsync(() => _chapterService.GetByIdAsync(id, cancellationToken));
     }
 
     [HttpPost]
     [Authorize(Roles = "Admin")]
-    public async Task<ActionResult<ResponseEnvelope<ChapterDto>>> Create(UpsertChapterRequest request, CancellationToken cancellationToken)
+    public Task<ActionResult<ResponseEnvelope<ChapterDto>>> Create(UpsertChapterRequest request, CancellationToken cancellationToken)
     {
-        var response = await _chapterService.CreateAsync(request, cancellationToken);
-        return Ok(ResponseEnvelope<ChapterDto>.Success(response));
+        return ExecuteAsync(() => _chapterService.CreateAsync(request, cancellationToken));
     }
 
     [HttpPut("{id:guid}")]
     [Authorize(Roles = "Admin")]
-    public async Task<ActionResult<ResponseEnvelope<ChapterDto>>> Update(Guid id, UpsertChapterRequest request, CancellationToken cancellationToken)
+    public Task<ActionResult<ResponseEnvelope<ChapterDto>>> Update(Guid id, UpsertChapterRequest request, CancellationToken cancellationToken)
     {
-        var response = await _chapterService.UpdateAsync(id, request, cancellationToken);
-        return Ok(ResponseEnvelope<ChapterDto>.Success(response));
+        return ExecuteAsync(() => _chapterService.UpdateAsync(id, request, cancellationToken));
     }
 
     [HttpDelete("{id:guid}")]
     [Authorize(Roles = "Admin")]
-    public async Task<ActionResult<ResponseEnvelope<object>>> Delete(Guid id, CancellationToken cancellationToken)
+    public Task<ActionResult<ResponseEnvelope<object>>> Delete(Guid id, CancellationToken cancellationToken)
     {
-        await _chapterService.DeleteAsync(id, cancellationToken);
-        return Ok(ResponseEnvelope<object>.Success(new { }));
+        return ExecuteAsync(() => _chapterService.DeleteAsync(id, cancellationToken));
     }
 }

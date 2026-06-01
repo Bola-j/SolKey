@@ -7,6 +7,7 @@ namespace SolKey.Infrastructure.Services;
 public class SessionTrackingMiddleware
 {
     private readonly RequestDelegate _next;
+    private static readonly TimeSpan UpdateInterval = TimeSpan.FromMinutes(5);
 
     public SessionTrackingMiddleware(RequestDelegate next)
     {
@@ -25,7 +26,14 @@ public class SessionTrackingMiddleware
                 var session = await dbContext.UserSessions.FirstOrDefaultAsync(s => s.UserId == userId && s.DeviceId == deviceId && s.IsActive);
                 if (session is not null)
                 {
-                    session.LastSeenAt = DateTime.UtcNow;
+                    var now = DateTime.UtcNow;
+                    if (session.LastSeenAt.Add(UpdateInterval) > now)
+                    {
+                        await _next(context);
+                        return;
+                    }
+
+                    session.LastSeenAt = now;
                     session.ModifiedAt = DateTime.UtcNow;
                     session.ModifiedBy = userId.ToString();
                     await dbContext.SaveChangesAsync();

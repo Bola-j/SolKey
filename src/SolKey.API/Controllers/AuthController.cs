@@ -10,7 +10,7 @@ namespace SolKey.API.Controllers;
 
 [ApiController]
 [Route("api/auth")]
-public class AuthController : ControllerBase
+public class AuthController : ApiControllerBase
 {
     private readonly IAuthService _authService;
     private readonly IHostEnvironment _environment;
@@ -26,67 +26,70 @@ public class AuthController : ControllerBase
 
 
     [Authorize]
-[HttpGet("test-auth")]
-public IActionResult TestAuth()
-{
-    return Ok(User.Identity?.Name);
-}
+    [HttpGet("test-auth")]
+    public IActionResult TestAuth()
+    {
+        if (!_environment.IsDevelopment())
+        {
+            return NotFound();
+        }
+
+        return Ok(ResponseEnvelope<object>.Success(new { user = User.Identity?.Name }));
+    }
 
     [HttpPost("register")]
-    public async Task<ActionResult<ResponseEnvelope<AuthResponse>>> Register(RegisterRequest request, CancellationToken cancellationToken)
+    public Task<ActionResult<ResponseEnvelope<AuthResponse>>> Register(RegisterRequest request, CancellationToken cancellationToken)
     {
-        var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? string.Empty;
         var normalizedRequest = ApplyDeviceDefaults(request);
-        var response = await _authService.RegisterAsync(normalizedRequest, cancellationToken);
-        return Ok(ResponseEnvelope<AuthResponse>.Success(response));
+        return ExecuteAsync(() => _authService.RegisterAsync(normalizedRequest, cancellationToken));
     }
 
     [HttpPost("login")]
-    public async Task<ActionResult<ResponseEnvelope<AuthResponse>>> Login(LoginRequest request, CancellationToken cancellationToken)
+    public Task<ActionResult<ResponseEnvelope<AuthResponse>>> Login(LoginRequest request, CancellationToken cancellationToken)
     {
         var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? string.Empty;
         var normalizedRequest = ApplyDeviceDefaults(request);
-        var response = await _authService.LoginAsync(normalizedRequest, ipAddress, cancellationToken);
-        return Ok(ResponseEnvelope<AuthResponse>.Success(response));
+        return ExecuteAsync(() => _authService.LoginAsync(normalizedRequest, ipAddress, cancellationToken));
     }
 
     [HttpPost("refresh")]
-    public async Task<ActionResult<ResponseEnvelope<AuthResponse>>> Refresh(RefreshRequest request, CancellationToken cancellationToken)
+    public Task<ActionResult<ResponseEnvelope<AuthResponse>>> Refresh(RefreshRequest request, CancellationToken cancellationToken)
     {
         var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? string.Empty;
         var normalizedRequest = ApplyDeviceDefaults(request);
-        var response = await _authService.RefreshAsync(normalizedRequest, ipAddress, cancellationToken);
-        return Ok(ResponseEnvelope<AuthResponse>.Success(response));
+        return ExecuteAsync(() => _authService.RefreshAsync(normalizedRequest, ipAddress, cancellationToken));
     }
 
     [HttpPost("logout")]
-    public async Task<ActionResult<ResponseEnvelope<object>>> Logout(LogoutRequest request, CancellationToken cancellationToken)
+    public Task<ActionResult<ResponseEnvelope<object>>> Logout(LogoutRequest request, CancellationToken cancellationToken)
     {
         var normalizedRequest = ApplyDeviceDefaults(request);
-        await _authService.LogoutAsync(normalizedRequest, cancellationToken);
-        return Ok(ResponseEnvelope<object>.Success(new { }));
+        return ExecuteAsync(() => _authService.LogoutAsync(normalizedRequest, cancellationToken));
     }
 
     [HttpGet("verify-email")]
-    public async Task<ActionResult<ResponseEnvelope<object>>> VerifyEmail([FromQuery] string token, CancellationToken cancellationToken)
+    public Task<ActionResult<ResponseEnvelope<object>>> VerifyEmail([FromQuery] string token, CancellationToken cancellationToken)
     {
-        await _authService.VerifyEmailAsync(token, cancellationToken);
-        return Ok(ResponseEnvelope<object>.Success(new { }));
+        return ExecuteAsync(() => _authService.VerifyEmailAsync(token, cancellationToken));
     }
 
     [Authorize]
     [HttpPost("resend-verification")]
-    public async Task<ActionResult<ResponseEnvelope<object>>> ResendVerification(CancellationToken cancellationToken)
+    public Task<ActionResult<ResponseEnvelope<object>>> ResendVerification(CancellationToken cancellationToken)
     {
         var userId = Guid.Parse(User.FindFirst("sub")!.Value);
-        await _authService.ResendVerificationAsync(userId, cancellationToken);
-        return Ok(ResponseEnvelope<object>.Success(new { }));
+        return ExecuteAsync(() => _authService.ResendVerificationAsync(userId, cancellationToken));
     }
 
     [Authorize]
     [HttpGet("whoami")]
     public ActionResult<ResponseEnvelope<object>> WhoAmI()
     {
+        if (!_environment.IsDevelopment())
+        {
+            return NotFound();
+        }
+
         var claims = User.Claims.Select(claim => new { claim.Type, claim.Value }).ToList();
         var hasAuthHeader = Request.Headers.ContainsKey("Authorization");
         return Ok(ResponseEnvelope<object>.Success(new { hasAuthHeader, claims }));

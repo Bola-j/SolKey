@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using System;
+using SolKey.Application.Common;
 using SolKey.Application.DTOs.Sessions;
 using SolKey.Application.Interfaces;
 using SolKey.Domain.Entities;
@@ -9,6 +11,9 @@ namespace SolKey.Infrastructure.Services;
 
 public class SessionService : ISessionService
 {
+    private const int DefaultPageSize = 20;
+    private const int MaxPageSize = 100;
+
     private readonly SolKeyDbContext _dbContext;
     private readonly IAccessControlService _accessControlService;
 
@@ -18,10 +23,22 @@ public class SessionService : ISessionService
         _accessControlService = accessControlService;
     }
 
-    public async Task<IReadOnlyCollection<SessionDto>> GetAllAsync(CancellationToken cancellationToken)
+    public async Task<PagedResponse<SessionDto>> GetAllAsync(int page, int pageSize, CancellationToken cancellationToken)
     {
-        var sessions = await _dbContext.ExplanationSessions.AsNoTracking().Where(s => s.IsApproved).ToListAsync(cancellationToken);
-        return sessions.Select(s => new SessionDto(s.Id, s.Title, s.Description, s.Price, s.IsApproved, s.AccessDurationDays)).ToList();
+        var normalizedPage = page < 1 ? 1 : page;
+        var normalizedPageSize = pageSize < 1 ? DefaultPageSize : Math.Min(pageSize, MaxPageSize);
+
+        var query = _dbContext.ExplanationSessions.AsNoTracking().Where(s => s.IsApproved);
+        var totalCount = await query.CountAsync(cancellationToken);
+
+        var sessions = await query
+            .OrderBy(s => s.Title)
+            .Skip((normalizedPage - 1) * normalizedPageSize)
+            .Take(normalizedPageSize)
+            .Select(s => new SessionDto(s.Id, s.Title, s.Description, s.Price, s.IsApproved, s.AccessDurationDays))
+            .ToListAsync(cancellationToken);
+
+        return PagedResponse<SessionDto>.Success(sessions, normalizedPage, normalizedPageSize, totalCount);
     }
 
     public async Task<SessionDto> CreateAsync(Guid teacherId, CreateSessionRequest request, CancellationToken cancellationToken)

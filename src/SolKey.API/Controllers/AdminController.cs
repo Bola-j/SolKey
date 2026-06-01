@@ -8,7 +8,7 @@ namespace SolKey.API.Controllers;
 [ApiController]
 [Route("api/admin")]
 [Authorize(Roles = "Admin")]
-public class AdminController : ControllerBase
+public class AdminController : ApiControllerBase
 {
     private readonly IAdminService _adminService;
 
@@ -18,23 +18,20 @@ public class AdminController : ControllerBase
     }
 
     [HttpPost("verify-teacher/{teacherId:guid}")]
-    public async Task<ActionResult<ResponseEnvelope<object>>> VerifyTeacher(Guid teacherId, CancellationToken cancellationToken)
+    public Task<ActionResult<ResponseEnvelope<object>>> VerifyTeacher(Guid teacherId, CancellationToken cancellationToken)
     {
-        await _adminService.ApproveTeacherAsync(teacherId, cancellationToken);
-        return Ok(ResponseEnvelope<object>.Success(new { }));
+        return ExecuteAsync(() => _adminService.ApproveTeacherAsync(teacherId, cancellationToken));
     }
 
     [HttpPost("approve-video/{videoId:guid}")]
-    public async Task<ActionResult<ResponseEnvelope<object>>> ApproveVideo(Guid videoId, CancellationToken cancellationToken)
+    public Task<ActionResult<ResponseEnvelope<object>>> ApproveVideo(Guid videoId, CancellationToken cancellationToken)
     {
-        await _adminService.ApproveVideoAsync(videoId, cancellationToken);
-        return Ok(ResponseEnvelope<object>.Success(new { }));
+        return ExecuteAsync(() => _adminService.ApproveVideoAsync(videoId, cancellationToken));
     }
 
     [HttpPost("approve-payment/{paymentId:guid}")]
-    public async Task<ActionResult<ResponseEnvelope<object>>> ApprovePayment(Guid paymentId, CancellationToken cancellationToken)
+    public Task<ActionResult<ResponseEnvelope<object>>> ApprovePayment(Guid paymentId, CancellationToken cancellationToken)
     {
-        await _adminService.ApprovePaymentAsync(paymentId, cancellationToken);
-        return Ok(ResponseEnvelope<object>.Success(new { }));
+        return ExecuteAsync(() => _adminService.ApprovePaymentAsync(paymentId, cancellationToken));
     }
 }

@@ -9,7 +9,7 @@ namespace SolKey.API.Controllers;
 [ApiController]
 [Route("api/user")]
 [Authorize]
-public class UserController : ControllerBase
+public class UserController : ApiControllerBase
 {
     private readonly IUserService _userService;
 
@@ -19,18 +19,16 @@ public class UserController : ControllerBase
     }
 
     [HttpGet("profile")]
-    public async Task<ActionResult<ResponseEnvelope<UserProfileResponse>>> GetProfile(CancellationToken cancellationToken)
+    public Task<ActionResult<ResponseEnvelope<UserProfileResponse>>> GetProfile(CancellationToken cancellationToken)
     {
         var userId = Guid.Parse(User.FindFirst("sub")!.Value);
-        var response = await _userService.GetProfileAsync(userId, cancellationToken);
-        return Ok(ResponseEnvelope<UserProfileResponse>.Success(response));
+        return ExecuteAsync(() => _userService.GetProfileAsync(userId, cancellationToken));
     }
 
     [HttpPut("profile")]
-    public async Task<ActionResult<ResponseEnvelope<UserProfileResponse>>> UpdateProfile(UpdateUserProfileRequest request, CancellationToken cancellationToken)
+    public Task<ActionResult<ResponseEnvelope<UserProfileResponse>>> UpdateProfile(UpdateUserProfileRequest request, CancellationToken cancellationToken)
     {
         var userId = Guid.Parse(User.FindFirst("sub")!.Value);
-        var response = await _userService.UpdateProfileAsync(userId, request, cancellationToken);
-        return Ok(ResponseEnvelope<UserProfileResponse>.Success(response));
+        return ExecuteAsync(() => _userService.UpdateProfileAsync(userId, request, cancellationToken));
     }
 }

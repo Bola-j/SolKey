@@ -9,7 +9,7 @@ namespace SolKey.API.Controllers;
 [ApiController]
 [Route("api/videos")]
 [Authorize]
-public class VideosController : ControllerBase
+public class VideosController : ApiControllerBase
 {
     private readonly IVideoService _videoService;
 
@@ -20,18 +20,16 @@ public class VideosController : ControllerBase
 
     [HttpPost("upload")]
     [Authorize(Roles = "Teacher")]
-    public async Task<ActionResult<ResponseEnvelope<VideoDto>>> Upload(UploadVideoRequest request, CancellationToken cancellationToken)
+    public Task<ActionResult<ResponseEnvelope<VideoDto>>> Upload(UploadVideoRequest request, CancellationToken cancellationToken)
     {
         var userId = Guid.Parse(User.FindFirst("sub")!.Value);
-        var response = await _videoService.UploadAsync(userId, request, cancellationToken);
-        return Ok(ResponseEnvelope<VideoDto>.Success(response));
+        return ExecuteAsync(() => _videoService.UploadAsync(userId, request, cancellationToken));
     }
 
     [HttpGet("{id:guid}/secure-url")]
-    public async Task<ActionResult<ResponseEnvelope<SecureVideoResponse>>> GetSecureUrl(Guid id, CancellationToken cancellationToken)
+    public Task<ActionResult<ResponseEnvelope<SecureVideoResponse>>> GetSecureUrl(Guid id, CancellationToken cancellationToken)
     {
         var userId = Guid.Parse(User.FindFirst("sub")!.Value);
-        var response = await _videoService.GetSecureUrlAsync(userId, id, cancellationToken);
-        return Ok(ResponseEnvelope<SecureVideoResponse>.Success(response));
+        return ExecuteAsync(() => _videoService.GetSecureUrlAsync(userId, id, cancellationToken));
     }
 }

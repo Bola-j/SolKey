@@ -8,7 +8,7 @@ namespace SolKey.API.Controllers;
 
 [ApiController]
 [Route("api/books")]
-public class BooksController : ControllerBase
+public class BooksController : ApiControllerBase
 {
     private readonly IBookService _bookService;
 
@@ -18,40 +18,38 @@ public class BooksController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<ResponseEnvelope<IReadOnlyCollection<BookDto>>>> GetAll(CancellationToken cancellationToken)
+    public Task<ActionResult<ResponseEnvelope<PagedResponse<BookDto>>>> GetAll(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        CancellationToken cancellationToken = default)
     {
-        var response = await _bookService.GetAllAsync(cancellationToken);
-        return Ok(ResponseEnvelope<IReadOnlyCollection<BookDto>>.Success(response));
+        return ExecuteAsync(() => _bookService.GetAllAsync(page, pageSize, cancellationToken));
     }
 
     [HttpGet("{id:guid}")]
-    public async Task<ActionResult<ResponseEnvelope<BookDto>>> GetById(Guid id, CancellationToken cancellationToken)
+    public Task<ActionResult<ResponseEnvelope<BookDto>>> GetById(Guid id, CancellationToken cancellationToken)
     {
-        var response = await _bookService.GetByIdAsync(id, cancellationToken);
-        return Ok(ResponseEnvelope<BookDto>.Success(response));
+        return ExecuteAsync(() => _bookService.GetByIdAsync(id, cancellationToken));
     }
 
     [HttpPost]
     [Authorize(Roles = "Admin")]
-    public async Task<ActionResult<ResponseEnvelope<BookDto>>> Create(UpsertBookRequest request, CancellationToken cancellationToken)
+    public Task<ActionResult<ResponseEnvelope<BookDto>>> Create(UpsertBookRequest request, CancellationToken cancellationToken)
     {
-        var response = await _bookService.CreateAsync(request, cancellationToken);
-        return Ok(ResponseEnvelope<BookDto>.Success(response));
+        return ExecuteAsync(() => _bookService.CreateAsync(request, cancellationToken));
     }
 
     [HttpPut("{id:guid}")]
     [Authorize(Roles = "Admin")]
-    public async Task<ActionResult<ResponseEnvelope<BookDto>>> Update(Guid id, UpsertBookRequest request, CancellationToken cancellationToken)
+    public Task<ActionResult<ResponseEnvelope<BookDto>>> Update(Guid id, UpsertBookRequest request, CancellationToken cancellationToken)
     {
-        var response = await _bookService.UpdateAsync(id, request, cancellationToken);
-        return Ok(ResponseEnvelope<BookDto>.Success(response));
+        return ExecuteAsync(() => _bookService.UpdateAsync(id, request, cancellationToken));
     }
 
     [HttpDelete("{id:guid}")]
     [Authorize(Roles = "Admin")]
-    public async Task<ActionResult<ResponseEnvelope<object>>> Delete(Guid id, CancellationToken cancellationToken)
+    public Task<ActionResult<ResponseEnvelope<object>>> Delete(Guid id, CancellationToken cancellationToken)
     {
-        await _bookService.DeleteAsync(id, cancellationToken);
-        return Ok(ResponseEnvelope<object>.Success(new { }));
+        return ExecuteAsync(() => _bookService.DeleteAsync(id, cancellationToken));
     }
 }

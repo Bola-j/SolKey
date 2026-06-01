@@ -10,7 +10,7 @@ namespace SolKey.API.Controllers;
 [ApiController]
 [Route("api/subscription")]
 [Authorize(Roles = "Student")]
-public class SubscriptionController : ControllerBase
+public class SubscriptionController : ApiControllerBase
 {
     private readonly ISubscriptionService _subscriptionService;
 
@@ -20,18 +20,16 @@ public class SubscriptionController : ControllerBase
     }
 
     [HttpGet("status")]
-    public async Task<ActionResult<ResponseEnvelope<SubscriptionStatusResponse>>> Status(CancellationToken cancellationToken)
+    public Task<ActionResult<ResponseEnvelope<SubscriptionStatusResponse>>> Status(CancellationToken cancellationToken)
     {
         var userId = Guid.Parse(User.FindFirst("sub")!.Value);
-        var response = await _subscriptionService.GetStatusAsync(userId, cancellationToken);
-        return Ok(ResponseEnvelope<SubscriptionStatusResponse>.Success(response));
+        return ExecuteAsync(() => _subscriptionService.GetStatusAsync(userId, cancellationToken));
     }
 
     [HttpPost("payment")]
-    public async Task<ActionResult<ResponseEnvelope<object>>> Payment(CreatePaymentRequest request, CancellationToken cancellationToken)
+    public Task<ActionResult<ResponseEnvelope<object>>> Payment(CreatePaymentRequest request, CancellationToken cancellationToken)
     {
         var userId = Guid.Parse(User.FindFirst("sub")!.Value);
-        await _subscriptionService.CreatePaymentAsync(userId, request, cancellationToken);
-        return Ok(ResponseEnvelope<object>.Success(new { }));
+        return ExecuteAsync(() => _subscriptionService.CreatePaymentAsync(userId, request, cancellationToken));
     }
 }

@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using System;
+using SolKey.Application.Common;
 using SolKey.Application.DTOs.Books;
 using SolKey.Application.Interfaces;
 using SolKey.Domain.Entities;
@@ -8,6 +10,9 @@ namespace SolKey.Infrastructure.Services;
 
 public class BookService : IBookService
 {
+    private const int DefaultPageSize = 20;
+    private const int MaxPageSize = 100;
+
     private readonly SolKeyDbContext _dbContext;
 
     public BookService(SolKeyDbContext dbContext)
@@ -15,10 +20,22 @@ public class BookService : IBookService
         _dbContext = dbContext;
     }
 
-    public async Task<IReadOnlyCollection<BookDto>> GetAllAsync(CancellationToken cancellationToken)
+    public async Task<PagedResponse<BookDto>> GetAllAsync(int page, int pageSize, CancellationToken cancellationToken)
     {
-        var books = await _dbContext.Books.AsNoTracking().ToListAsync(cancellationToken);
-        return books.Select(book => new BookDto(book.Id, book.Title, book.Description, book.CoverImage)).ToList();
+        var normalizedPage = page < 1 ? 1 : page;
+        var normalizedPageSize = pageSize < 1 ? DefaultPageSize : Math.Min(pageSize, MaxPageSize);
+
+        var query = _dbContext.Books.AsNoTracking();
+        var totalCount = await query.CountAsync(cancellationToken);
+
+        var books = await query
+            .OrderBy(b => b.Title)
+            .Skip((normalizedPage - 1) * normalizedPageSize)
+            .Take(normalizedPageSize)
+            .Select(book => new BookDto(book.Id, book.Title, book.Description, book.CoverImage))
+            .ToListAsync(cancellationToken);
+
+        return PagedResponse<BookDto>.Success(books, normalizedPage, normalizedPageSize, totalCount);
     }
 
     public async Task<BookDto> GetByIdAsync(Guid id, CancellationToken cancellationToken)

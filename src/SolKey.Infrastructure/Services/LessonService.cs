@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using System;
+using SolKey.Application.Common;
 using SolKey.Application.DTOs.Lessons;
 using SolKey.Application.Interfaces;
 using SolKey.Domain.Entities;
@@ -8,6 +10,9 @@ namespace SolKey.Infrastructure.Services;
 
 public class LessonService : ILessonService
 {
+    private const int DefaultPageSize = 20;
+    private const int MaxPageSize = 100;
+
     private readonly SolKeyDbContext _dbContext;
 
     public LessonService(SolKeyDbContext dbContext)
@@ -15,14 +20,23 @@ public class LessonService : ILessonService
         _dbContext = dbContext;
     }
 
-    public async Task<IReadOnlyCollection<LessonDto>> GetByChapterAsync(Guid chapterId, CancellationToken cancellationToken)
+    public async Task<PagedResponse<LessonDto>> GetByChapterAsync(Guid chapterId, int page, int pageSize, CancellationToken cancellationToken)
     {
-        var lessons = await _dbContext.Lessons.AsNoTracking()
-            .Where(l => l.ChapterId == chapterId)
+        var normalizedPage = page < 1 ? 1 : page;
+        var normalizedPageSize = pageSize < 1 ? DefaultPageSize : Math.Min(pageSize, MaxPageSize);
+
+        var query = _dbContext.Lessons.AsNoTracking()
+            .Where(l => l.ChapterId == chapterId);
+
+        var totalCount = await query.CountAsync(cancellationToken);
+        var lessons = await query
             .OrderBy(l => l.Order)
+            .Skip((normalizedPage - 1) * normalizedPageSize)
+            .Take(normalizedPageSize)
+            .Select(lesson => new LessonDto(lesson.Id, lesson.ChapterId, lesson.Title, lesson.Order))
             .ToListAsync(cancellationToken);
 
-        return lessons.Select(lesson => new LessonDto(lesson.Id, lesson.ChapterId, lesson.Title, lesson.Order)).ToList();
+        return PagedResponse<LessonDto>.Success(lessons, normalizedPage, normalizedPageSize, totalCount);
     }
 
     public async Task<LessonDto> GetByIdAsync(Guid id, CancellationToken cancellationToken)

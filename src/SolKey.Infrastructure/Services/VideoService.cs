@@ -32,6 +32,11 @@ public class VideoService : IVideoService
             throw new InvalidOperationException("Only teachers can upload videos.");
         }
 
+        if (!teacher.IsVerifiedTeacher)
+        {
+            throw new InvalidOperationException("Only verified teachers can upload videos.");
+        }
+
         if (!Enum.TryParse<VideoType>(request.Type, true, out var type))
         {
             throw new InvalidOperationException("Invalid video type.");
@@ -42,10 +47,16 @@ public class VideoService : IVideoService
             throw new InvalidOperationException("Upload ticket required.");
         }
 
-        var ticketValid = await _uploadService.ValidateAndConsumeTicketAsync(request.UploadTicketId.Value, teacherId, cancellationToken);
+        var ticketValid = await _uploadService.ValidateAndConsumeTicketAsync(request.UploadTicketId.Value, teacherId, request.BlobPath, cancellationToken);
         if (!ticketValid)
         {
             throw new InvalidOperationException("Invalid or expired upload ticket.");
+        }
+
+        var blobExists = await _storageService.BlobExistsAsync(request.BlobPath, cancellationToken);
+        if (!blobExists)
+        {
+            throw new InvalidOperationException("Upload blob not found.");
         }
 
         var video = new Video

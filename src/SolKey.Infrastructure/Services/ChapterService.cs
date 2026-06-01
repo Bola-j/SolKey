@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using System;
+using SolKey.Application.Common;
 using SolKey.Application.DTOs.Chapters;
 using SolKey.Application.Interfaces;
 using SolKey.Domain.Entities;
@@ -8,6 +10,9 @@ namespace SolKey.Infrastructure.Services;
 
 public class ChapterService : IChapterService
 {
+    private const int DefaultPageSize = 20;
+    private const int MaxPageSize = 100;
+
     private readonly SolKeyDbContext _dbContext;
 
     public ChapterService(SolKeyDbContext dbContext)
@@ -15,14 +20,23 @@ public class ChapterService : IChapterService
         _dbContext = dbContext;
     }
 
-    public async Task<IReadOnlyCollection<ChapterDto>> GetByBookAsync(Guid bookId, CancellationToken cancellationToken)
+    public async Task<PagedResponse<ChapterDto>> GetByBookAsync(Guid bookId, int page, int pageSize, CancellationToken cancellationToken)
     {
-        var chapters = await _dbContext.Chapters.AsNoTracking()
-            .Where(c => c.BookId == bookId)
+        var normalizedPage = page < 1 ? 1 : page;
+        var normalizedPageSize = pageSize < 1 ? DefaultPageSize : Math.Min(pageSize, MaxPageSize);
+
+        var query = _dbContext.Chapters.AsNoTracking()
+            .Where(c => c.BookId == bookId);
+
+        var totalCount = await query.CountAsync(cancellationToken);
+        var chapters = await query
             .OrderBy(c => c.Order)
+            .Skip((normalizedPage - 1) * normalizedPageSize)
+            .Take(normalizedPageSize)
+            .Select(chapter => new ChapterDto(chapter.Id, chapter.BookId, chapter.Title, chapter.Order))
             .ToListAsync(cancellationToken);
 
-        return chapters.Select(chapter => new ChapterDto(chapter.Id, chapter.BookId, chapter.Title, chapter.Order)).ToList();
+        return PagedResponse<ChapterDto>.Success(chapters, normalizedPage, normalizedPageSize, totalCount);
     }
 
     public async Task<ChapterDto> GetByIdAsync(Guid id, CancellationToken cancellationToken)

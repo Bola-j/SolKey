@@ -41,4 +41,23 @@ public class StorageService : IStorageService
 
         return await Task.FromResult(_s3Client.GetPreSignedURL(request));
     }
+
+    public async Task<bool> BlobExistsAsync(string blobPath, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var request = new GetObjectMetadataRequest
+            {
+                BucketName = _bucketName,
+                Key = blobPath
+            };
+
+            await _s3Client.GetObjectMetadataAsync(request, cancellationToken);
+            return true;
+        }
+        catch (AmazonS3Exception ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            return false;
+        }
+    }
 }
