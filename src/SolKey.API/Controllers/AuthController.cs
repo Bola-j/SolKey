@@ -24,6 +24,14 @@ public class AuthController : ControllerBase
         _environment = environment;
     }
 
+
+    [Authorize]
+[HttpGet("test-auth")]
+public IActionResult TestAuth()
+{
+    return Ok(User.Identity?.Name);
+}
+
     [HttpPost("register")]
     public async Task<ActionResult<ResponseEnvelope<AuthResponse>>> Register(RegisterRequest request, CancellationToken cancellationToken)
     {

@@ -12,12 +12,14 @@ public class VideoService : IVideoService
     private readonly SolKeyDbContext _dbContext;
     private readonly IStorageService _storageService;
     private readonly IAccessControlService _accessControlService;
+    private readonly IUploadService _uploadService;
 
-    public VideoService(SolKeyDbContext dbContext, IStorageService storageService, IAccessControlService accessControlService)
+    public VideoService(SolKeyDbContext dbContext, IStorageService storageService, IAccessControlService accessControlService, IUploadService uploadService)
     {
         _dbContext = dbContext;
         _storageService = storageService;
         _accessControlService = accessControlService;
+        _uploadService = uploadService;
     }
 
     public async Task<VideoDto> UploadAsync(Guid teacherId, UploadVideoRequest request, CancellationToken cancellationToken)
@@ -33,6 +35,17 @@ public class VideoService : IVideoService
         if (!Enum.TryParse<VideoType>(request.Type, true, out var type))
         {
             throw new InvalidOperationException("Invalid video type.");
+        }
+
+        if (request.UploadTicketId is null)
+        {
+            throw new InvalidOperationException("Upload ticket required.");
+        }
+
+        var ticketValid = await _uploadService.ValidateAndConsumeTicketAsync(request.UploadTicketId.Value, teacherId, cancellationToken);
+        if (!ticketValid)
+        {
+            throw new InvalidOperationException("Invalid or expired upload ticket.");
         }
 
         var video = new Video

@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using SolKey.Infrastructure.Persistence;
@@ -11,9 +12,11 @@ using SolKey.Infrastructure.Persistence;
 namespace SolKey.Infrastructure.Migrations
 {
     [DbContext(typeof(SolKeyDbContext))]
-    partial class SolKeyDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260601073138_AddUploadTickets")]
+    partial class AddUploadTickets
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

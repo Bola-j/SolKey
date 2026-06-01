@@ -1,24 +1,22 @@
-using Amazon.Extensions.NETCore.Setup;
 using Amazon.Runtime;
 using Amazon.S3;
 using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-using Microsoft.OpenApi;
+using Microsoft.OpenApi.Models;
 using Serilog;
 using SolKey.API.Middleware;
-using SolKey.Application.Interfaces;
 using SolKey.Application.DTOs.Auth;
 using SolKey.Application.DTOs.Payments;
 using SolKey.Application.DTOs.Questions;
 using SolKey.Application.DTOs.Sessions;
 using SolKey.Application.DTOs.Videos;
+using SolKey.Application.Interfaces;
 using SolKey.Application.Validators;
-using SolKey.Infrastructure.Identity;
+using SolKey.Infrastructure.Identity;   
 using SolKey.Infrastructure.Persistence;
 using SolKey.Infrastructure.Services;
-using System.Collections.Generic;
 using System.IdentityModel.Tokens.Jwt;
 using System.Text;
 
@@ -51,6 +49,7 @@ public partial class Program
                 options.JsonSerializerOptions.PropertyNamingPolicy = null;
             });
 
+        // Validators
         builder.Services.AddScoped<IValidator<RegisterRequest>, RegisterRequestValidator>();
         builder.Services.AddScoped<IValidator<LoginRequest>, LoginRequestValidator>();
         builder.Services.AddScoped<IValidator<CreateSessionRequest>, CreateSessionRequestValidator>();
@@ -62,80 +61,70 @@ public partial class Program
         // Database
         // =========================
         builder.Services.AddDbContext<SolKeyDbContext>(options =>
-            options.UseNpgsql(
-                builder.Configuration.GetConnectionString("DefaultConnection")));
+            options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
         // =========================
         // JWT
         // =========================
-        var jwtOptions =
-            builder.Configuration
-                .GetSection("Jwt")
-                .Get<JwtOptions>() ?? new JwtOptions();
+        var jwtOptions = builder.Configuration
+            .GetSection("Jwt")
+            .Get<JwtOptions>() ?? new JwtOptions();
 
         builder.Services.AddSingleton(jwtOptions);
         builder.Services.AddSingleton<JwtTokenService>();
 
+        JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear();
         builder.Services
             .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
             {
                 options.IncludeErrorDetails = true;
-                options.TokenValidationParameters =
-                    new TokenValidationParameters
-                    {
-                        ValidateIssuer = true,
-                        ValidateAudience = true,
-                        ValidateLifetime = true,
-                        ValidateIssuerSigningKey = true,
 
-                        NameClaimType = JwtRegisteredClaimNames.Sub,
-                        RoleClaimType = "role",
+                options.TokenValidationParameters = new TokenValidationParameters
+                {
+                    ValidateIssuer = true,
+                    ValidateAudience = true,
+                    ValidateLifetime = true,
+                    ValidateIssuerSigningKey = true,
 
-                        ValidIssuer = jwtOptions.Issuer,
-                        ValidAudience = jwtOptions.Audience,
+                    NameClaimType = JwtRegisteredClaimNames.Sub,
+                    RoleClaimType = System.Security.Claims.ClaimTypes.Role,
 
-                        IssuerSigningKey =
-                            new SymmetricSecurityKey(
-                                Encoding.UTF8.GetBytes(jwtOptions.SigningKey))
-                    };
+                    ValidIssuer = jwtOptions.Issuer,
+                    ValidAudience = jwtOptions.Audience,
+
+                    IssuerSigningKey = new SymmetricSecurityKey(
+                        Encoding.UTF8.GetBytes(jwtOptions.SigningKey))
+                };
 
                 options.Events = new JwtBearerEvents
                 {
                     OnMessageReceived = context =>
                     {
-                        var logger = context.HttpContext.RequestServices
-                            .GetRequiredService<ILoggerFactory>()
-                            .CreateLogger("JwtAuth");
+                        var authHeader = context.Request.Headers.Authorization.ToString();
 
-                        if (!context.Request.Headers.ContainsKey("Authorization"))
+                        if (!string.IsNullOrWhiteSpace(authHeader) &&
+                            authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
                         {
-                            logger.LogWarning("Missing Authorization header.");
+                            context.Token = authHeader["Bearer ".Length..].Trim();
                         }
 
                         return Task.CompletedTask;
                     },
+
+                    OnTokenValidated = context =>
+                    {
+                        
+                        return Task.CompletedTask;
+                    },
+
                     OnAuthenticationFailed = context =>
                     {
-                        var logger = context.HttpContext.RequestServices
-                            .GetRequiredService<ILoggerFactory>()
-                            .CreateLogger("JwtAuth");
-
-                        logger.LogWarning(context.Exception, "JWT authentication failed.");
                         return Task.CompletedTask;
                     },
+
                     OnChallenge = context =>
                     {
-                        if (context.AuthenticateFailure is null)
-                        {
-                            return Task.CompletedTask;
-                        }
-
-                        var logger = context.HttpContext.RequestServices
-                            .GetRequiredService<ILoggerFactory>()
-                            .CreateLogger("JwtAuth");
-
-                        logger.LogWarning(context.AuthenticateFailure, "JWT challenge triggered.");
                         return Task.CompletedTask;
                     }
                 };
@@ -146,10 +135,9 @@ public partial class Program
         // =========================
         // Email
         // =========================
-        var emailOptions =
-            builder.Configuration
-                .GetSection("Email")
-                .Get<EmailOptions>() ?? new EmailOptions();
+        var emailOptions = builder.Configuration
+            .GetSection("Email")
+            .Get<EmailOptions>() ?? new EmailOptions();
 
         builder.Services.AddSingleton(emailOptions);
         builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
@@ -161,24 +149,35 @@ public partial class Program
 
         builder.Services.AddSwaggerGen(options =>
         {
-            options.SwaggerDoc("v1", new OpenApiInfo { Title = "SolKey API", Version = "v1" });
+            options.SwaggerDoc("v1", new OpenApiInfo
+            {
+                Title = "SolKey API",
+                Version = "v1"
+            });
 
-            var scheme = new OpenApiSecurityScheme
+            options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
             {
                 Name = "Authorization",
                 Type = SecuritySchemeType.Http,
                 Scheme = "bearer",
                 BearerFormat = "JWT",
                 In = ParameterLocation.Header,
-                Description = "JWT Authorization header using the Bearer scheme."
-            };
+                Description = "Enter: Bearer {your JWT token}"
+            });
 
-            options.AddSecurityDefinition("Bearer", scheme);
-
-            var schemeReference = new OpenApiSecuritySchemeReference("Bearer", null, null);
-            options.AddSecurityRequirement(_ => new OpenApiSecurityRequirement
+            options.AddSecurityRequirement(new OpenApiSecurityRequirement
             {
-                { schemeReference, new List<string>() }
+                {
+                    new OpenApiSecurityScheme
+                    {
+                        Reference = new OpenApiReference
+                        {
+                            Type = ReferenceType.SecurityScheme,
+                            Id = "Bearer"
+                        }
+                    },
+                    new List<string>()
+                }
             });
         });
 
@@ -197,8 +196,8 @@ public partial class Program
                 ForcePathStyle = true
             };
 
-            return string.IsNullOrWhiteSpace(storageAccessKey)
-                || string.IsNullOrWhiteSpace(storageSecretKey)
+            return string.IsNullOrWhiteSpace(storageAccessKey) ||
+                   string.IsNullOrWhiteSpace(storageSecretKey)
                 ? new AmazonS3Client(config)
                 : new AmazonS3Client(
                     new BasicAWSCredentials(storageAccessKey, storageSecretKey),
@@ -223,11 +222,7 @@ public partial class Program
         builder.Services.AddScoped<IStorageService>(provider =>
         {
             var s3Client = provider.GetRequiredService<IAmazonS3>();
-
-            var bucketName =
-                builder.Configuration["Storage:BucketName"]
-                ?? string.Empty;
-
+            var bucketName = builder.Configuration["Storage:BucketName"] ?? "";
             return new StorageService(s3Client, bucketName);
         });
 
@@ -245,32 +240,22 @@ public partial class Program
         // Middleware
         // =========================
         app.UseSerilogRequestLogging();
-
         app.UseMiddleware<ExceptionHandlingMiddleware>();
 
-        // Swagger
         app.UseSwagger();
-
         app.UseSwaggerUI(options =>
         {
-            options.SwaggerEndpoint(
-                "/swagger/v1/swagger.json",
-                "SolKey API v1");
-
+            options.SwaggerEndpoint("/swagger/v1/swagger.json", "SolKey API v1");
             options.RoutePrefix = string.Empty;
         });
 
-        // HTTPS
         app.UseHttpsRedirection();
 
-        // Auth
         app.UseAuthentication();
         app.UseAuthorization();
 
-        // Custom Middleware
         app.UseMiddleware<SessionTrackingMiddleware>();
 
-        // Controllers
         app.MapControllers();
 
         app.Run();

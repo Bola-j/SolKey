@@ -6,4 +6,5 @@ public record UploadVideoRequest(
     bool IsPremium,
     string Type,
     Guid? QuestionId,
-    Guid? SessionId);
+    Guid? SessionId,
+    Guid? UploadTicketId);
