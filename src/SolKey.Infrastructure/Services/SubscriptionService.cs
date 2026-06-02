@@ -38,6 +38,7 @@ public class SubscriptionService : ISubscriptionService
         {
             Id = Guid.NewGuid(),
             UserId = userId,
+            SessionId = type == PaymentType.SessionPurchase ? request.SessionId : null,
             Amount = request.Amount,
             Type = type,
             ScreenshotPath = request.ScreenshotPath,

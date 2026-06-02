@@ -66,7 +66,7 @@ public class QuestionService : IQuestionService
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task VoteAsync(Guid studentId, VoteRequest request, CancellationToken cancellationToken)
+    public async Task VoteAsync(VoteRequest request, CancellationToken cancellationToken)
     {
         var answer = await _dbContext.Answers.FirstOrDefaultAsync(a => a.Id == request.AnswerId, cancellationToken)
             ?? throw new InvalidOperationException("Answer not found.");
@@ -80,8 +80,7 @@ public class QuestionService : IQuestionService
             answer.Downvotes += 1;
         }
 
-        answer.ModifiedAt = DateTime.UtcNow;
-        answer.ModifiedBy = studentId.ToString();
+        // Keep voting anonymous: only aggregate counts are persisted.
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 }

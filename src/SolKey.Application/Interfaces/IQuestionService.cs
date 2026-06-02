@@ -6,5 +6,5 @@ public interface IQuestionService
 {
     Task<QuestionDto> AskAsync(Guid studentId, AskQuestionRequest request, CancellationToken cancellationToken);
     Task AnswerAsync(Guid teacherId, AnswerQuestionRequest request, CancellationToken cancellationToken);
-    Task VoteAsync(Guid studentId, VoteRequest request, CancellationToken cancellationToken);
+    Task VoteAsync(VoteRequest request, CancellationToken cancellationToken);
 }

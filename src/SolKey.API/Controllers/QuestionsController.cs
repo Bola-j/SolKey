@@ -53,6 +53,6 @@ public class QuestionsController : ApiControllerBase
         }
 
         _cache.Set(cacheKey, true, VoteCooldown);
-        return ExecuteAsync(() => _questionService.VoteAsync(userId, request, cancellationToken));
+        return ExecuteAsync(() => _questionService.VoteAsync(request, cancellationToken));
     }
 }
